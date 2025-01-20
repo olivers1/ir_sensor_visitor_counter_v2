@@ -46,12 +46,12 @@ class SensorSample:
         self.timestamp: int = 0
         self.trig_state = SensorTrigState.NO_TRIG
         
-    def set(self, value, timestamp, trig_state):
+    def set_sample(self, value, timestamp, trig_state):
         self.value = value
         self.timestamp = timestamp
         self.trig_state = trig_state
     
-    def get(self):
+    def get_sample(self):
         return self.value, self.timestamp, self.trig_state
 
 
@@ -75,26 +75,55 @@ class IrSensor:
     
 
 class SensorHandler:
-    pass
-    
-    # def __init__(self, number_of_sensors: int, max_samples: int):
-    #     self.number_of_sensors = number_of_sensors
-    #     self.max_samples = max_samples
-    #     #self.sensor_logs = np.array([[SensorSample()]*max_samples] * self.number_of_sensors)    # create number of objects needed to store the buffered sensor data
-    #     self.sensor_logs = np.array([[SensorSample() for _ in range(max_samples)] for _ in range(self.number_of_sensors)])    # create number of objects needed to store the buffered sensor data
+    def __init__(self, number_of_sensors: int, num_sample_columns: int):
+        self.number_of_sensors = number_of_sensors
+        self.num_sample_columns = num_sample_columns
         
-    # def register_sample(self, sensor_id, index, value, timestamp, trig_state):
-    #     self.sensor_logs[sensor_id][index].set(value, timestamp, trig_state)    
+        self.index_counter = 0
+        self.sensor_log_sample_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
+        print(self.sensor_log_sample_array)
+        print(np.shape(self.sensor_log_sample_array))
+        
+    def register_log_sample(self, sensor_id, value: int, timestamp: int, trig_state: SensorTrigState):
+        # check if there are any empty columns to store sample in, otherwise create more columns
+        #print(np.shape(self.sensor_log_sample_array)[1])
+        if(np.shape(self.sensor_log_sample_array)[1] <= self.index_counter):
+            new_columns = self.create_log_sample_array(self.number_of_sensors, 1)   # create one extra column
+            self.sensor_log_sample_array = np.append(self.sensor_log_sample_array, new_columns, 1)
+            #print(self.sensor_log_sample_array)
+            #print(np.shape(self.sensor_log_sample_array))
+        self.sensor_log_sample_array[sensor_id][self.index_counter].set_sample(value, timestamp, trig_state)
+        
+        # increase index_counter when all sensors have stored their data samples, first sensor_id is zero '0'
+        if(sensor_id == self.number_of_sensors - 1):
+            self.index_counter += 1  
+
+    def create_log_sample_array(self, number_of_sensors: int, num_of_columns):
+        return np.array([[SensorSample()] * self.num_sample_columns] * self.number_of_sensors)
+                                
+    def get_log_sample(self, sensor_id, sample_index):
+        return self.sensor_log_sample_array[sensor_id][sample_index]
     
-    # def get_sample(self, sensor_id: int, index: int):
-    #     return self.sensor_logs[sensor_id][index]
-    
-    # def get_sensor_logs(self):
-    #     return self.sensor_logs
+    def get_sensor_log_sample_array(self):
+        return self.sensor_log_sample_array
+
+
 
 
 def main():
-    pass
+    sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
+    number_of_sensors = 2
+    sensors = []
+    for sensor_id in range(number_of_sensors):
+        sensors.append(IrSensor(sensor_id, sensor_trig_threshold))
+
+    sensor_handler = SensorHandler(number_of_sensors, 1)
+    for sensor_id, sensor in enumerate(sensors):
+        sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
+
+    print(sensor_handler.get_sensor_log_sample_array())
+
+
 
 
 if __name__ == "__main__":
