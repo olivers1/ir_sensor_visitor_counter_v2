@@ -44,7 +44,7 @@ class SensorSample:
     def __init__(self):
         self.value: int = 0
         self.timestamp: int = 0
-        self.trig_state = SensorTrigState.NO_TRIG
+        self.trig_state = SensorTrigState.UNKNOWN
         
     def set_sample(self, value, timestamp, trig_state):
         self.value = value
@@ -81,22 +81,26 @@ class SensorHandler:
         
         self.index_counter = 0
         self.sensor_log_sample_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
-        print(self.sensor_log_sample_array)
-        print(np.shape(self.sensor_log_sample_array))
         
     def register_log_sample(self, sensor_id, value: int, timestamp: int, trig_state: SensorTrigState):
-        # check if there are any empty columns to store sample in, otherwise create more columns
-        #print(np.shape(self.sensor_log_sample_array)[1])
-        if(np.shape(self.sensor_log_sample_array)[1] <= self.index_counter):
-            new_columns = self.create_log_sample_array(self.number_of_sensors, 1)   # create one extra column
-            self.sensor_log_sample_array = np.append(self.sensor_log_sample_array, new_columns, 1)
-            #print(self.sensor_log_sample_array)
-            #print(np.shape(self.sensor_log_sample_array))
-        self.sensor_log_sample_array[sensor_id][self.index_counter].set_sample(value, timestamp, trig_state)
+        # print(np.shape(self.sensor_log_sample_array))
+        # print(self.sensor_log_sample_array)
         
+        # check if there are any empty columns to store sample in, otherwise create more columns
+        # check only when all sensors have stored their data samples, first sensor_id is zero '0'
+        if(sensor_id == self.number_of_sensors - 1):
+            #print(np.shape(self.sensor_log_sample_array)[1])
+            if(np.shape(self.sensor_log_sample_array)[1] <= self.index_counter + 1):
+                new_columns = self.create_log_sample_array(self.number_of_sensors, 1)   # create one extra column
+                self.sensor_log_sample_array = np.append(self.sensor_log_sample_array, new_columns, 1)
+            
+        self.sensor_log_sample_array[sensor_id][self.index_counter].set_sample(value, timestamp, trig_state)
+
         # increase index_counter when all sensors have stored their data samples, first sensor_id is zero '0'
         if(sensor_id == self.number_of_sensors - 1):
-            self.index_counter += 1  
+            self.index_counter += 1
+            return self.index_counter - 1   # value adjusted to return the index of last stored sample
+        return self.index_counter
 
     def create_log_sample_array(self, number_of_sensors: int, num_of_columns):
         return np.array([[SensorSample()] * self.num_sample_columns] * self.number_of_sensors)
@@ -108,21 +112,27 @@ class SensorHandler:
         return self.sensor_log_sample_array
 
 
-
-
 def main():
     sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
     number_of_sensors = 2
     sensors = []
+    initial_num_sample_columns = 1
+
     for sensor_id in range(number_of_sensors):
         sensors.append(IrSensor(sensor_id, sensor_trig_threshold))
+    
+    sensor_handler = SensorHandler(number_of_sensors, initial_num_sample_columns)
 
-    sensor_handler = SensorHandler(number_of_sensors, 1)
-    for sensor_id, sensor in enumerate(sensors):
-        sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
-
-    print(sensor_handler.get_sensor_log_sample_array())
-
+    i = 0
+    while(i < 10):
+        for sensor_id, sensor in enumerate(sensors):
+            index_counter = sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
+            print(f"({int(sensor_id)}, {index_counter})")
+            print(sensor_handler.sensor_log_sample_array[sensor_id][index_counter].value, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].timestamp, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].trig_state.name)
+            
+        i += 1
+    
+    #print(sensor_handler.get_sensor_log_sample_array())
 
 
 
