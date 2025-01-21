@@ -112,27 +112,80 @@ class SensorHandler:
         return self.sensor_log_sample_array
 
 
+class TrigEvaluator:
+    def __init__(self):
+        self.sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
+        self.number_of_sensors = 2
+        self.sensors = []   # list containing all sensors
+        self.initial_num_sample_columns = 1     # specifies number of columns for the initial log array
+        self.readout_frequency = 0.5     # Hz
+        self.index_counter = 0      # current index of sensor_log_sample_array
+        self.num_consecutive_trigs = 6      # number of sensor trigs in a consecutive order to count it as a trig 
+
+        self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns)
+    
+    def run(self):
+        for sensor_id in range(self.number_of_sensors):
+            self.sensors.append(IrSensor(sensor_id, self.sensor_trig_threshold))
+    
+        while(True):
+            for sensor_id, sensor in enumerate(self.sensors):
+                self.index_counter = self.sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
+                print(f"({int(sensor_id)}, {self.index_counter})")
+                print(self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].value, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].timestamp, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].trig_state.name)
+
+            time.sleep(1/self.readout_frequency) # setting periodic time for sensor readout
+    
+    def get_evaluated_sensor_trigs():
+        # go through the sensor_sample_logs_array samples for each sensor
+        # identify when there are a number of samples in row that matches the num_consecutive_trigs variable
+        # when a series of trigs have been identified, store timestamp mean value (key) and trig state (value) to a new dict for each of the sensors
+        pass
+
+    def get_sensor_timestamp_mean_value(self):
+        # extract TRIG timestamp from sensor_log_sample_array from each sensor and add data to a new array for each sensor
+        # calculate timestamp mean value for each sensor
+        # store mean values for all sensors in a dict accessable within this class
+        # return dict with (key: value) sensor_id: timestamp_mean_value
+        pass
+
+    def get_motion_direction(self, *args):
+        # access dict with all sensors along with their timestamp mean values
+        # sensor_trigs = {}
+        # for key, value in args.items():
+        #     print(key, value)
+        #     sensor_trigs[key] = value
+
+        # sort dictionary to determine which of the sensors that trigged first  sorted_dict = dict(sorted(my_dict.items()))
+        # add if statement to determine which if an entry or exit was detected
+        pass
+    
+
 def main():
-    sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
-    number_of_sensors = 2
-    sensors = []
-    initial_num_sample_columns = 1
 
-    for sensor_id in range(number_of_sensors):
-        sensors.append(IrSensor(sensor_id, sensor_trig_threshold))
-    
-    sensor_handler = SensorHandler(number_of_sensors, initial_num_sample_columns)
+    app = TrigEvaluator()
+    app.run()
 
-    i = 0
-    while(i < 10):
-        for sensor_id, sensor in enumerate(sensors):
-            index_counter = sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
-            print(f"({int(sensor_id)}, {index_counter})")
-            print(sensor_handler.sensor_log_sample_array[sensor_id][index_counter].value, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].timestamp, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].trig_state.name)
-            
-        i += 1
+
+    # sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
+    # number_of_sensors = 2
+    # sensors = []
+    # initial_num_sample_columns = 1
+    # readout_frequency = 0.5     # Hz
+
+    # for sensor_id in range(number_of_sensors):
+    #     sensors.append(IrSensor(sensor_id, sensor_trig_threshold))
     
-    #print(sensor_handler.get_sensor_log_sample_array())
+    # sensor_handler = SensorHandler(number_of_sensors, initial_num_sample_columns)
+
+    
+    # while(True):
+    #     for sensor_id, sensor in enumerate(sensors):
+    #         index_counter = sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
+    #         print(f"({int(sensor_id)}, {index_counter})")
+    #         print(sensor_handler.sensor_log_sample_array[sensor_id][index_counter].value, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].timestamp, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].trig_state.name)
+
+    #     time.sleep(1/readout_frequency) # setting periodic time for sensor readout
 
 
 
