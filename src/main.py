@@ -75,12 +75,14 @@ class IrSensor:
     
 
 class SensorHandler:
-    def __init__(self, number_of_sensors: int, num_sample_columns: int):
+    def __init__(self, number_of_sensors: int, num_sample_columns: int, num_consecutive_trigs):
         self.number_of_sensors = number_of_sensors
         self.num_sample_columns = num_sample_columns
+        self.num_consecutive_trigs = num_consecutive_trigs
         
         self.index_counter = 0
         self.sensor_log_sample_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
+        self.consecutive_num_trigs_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
         
     def register_log_sample(self, sensor_id, value: int, timestamp: int, trig_state: SensorTrigState):
         # check if there are any empty columns to store sample in, otherwise create more columns
@@ -119,7 +121,7 @@ class TrigEvaluator:
         self.index_counter = 0      # current index of sensor_log_sample_array
         self.num_consecutive_trigs = 2      # number of sensor trigs in a consecutive order to count it as a trig
 
-        self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns)
+        self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
     
     def run(self):
         for sensor_id in range(self.number_of_sensors):
@@ -140,15 +142,16 @@ class TrigEvaluator:
                 self.get_sensor_trig_start_stop()
     
     def get_sensor_trig_start_stop(self):
-        # list to evaluate 
-        temp_list = self.sensor_handler.create_log_sample_array(self.number_of_sensors, self.num_consecutive_trigs)
-
+        # add samples to consecutive_num_trigs_array
         for sensor_id in range(self.number_of_sensors):
-            for temp_list_index in range(1, self.num_consecutive_trigs):
-                temp_list[sensor_id][temp_list_index] = self.sensor_handler.get_log_sample(sensor_id, self.index_counter - temp_list_index)
-            print("temp_list")
-            print(temp_list)
-                
+            for list_index in range(self.num_consecutive_trigs - 1):
+                self.sensor_handler.consecutive_num_trigs_array[sensor_id][list_index] = self.sensor_handler.get_log_sample(sensor_id, self.index_counter - list_index)
+            #print(self.sensor_handler.consecutive_num_trigs_array)
+        
+        # evaluate the consecutive_num_trigs_array to find all items in list to be TRIG or NO_TRIG
+        # when all TRIGs start storing values into main log array and when all are NO_TRIGs enter an evaluation func 
+        # to extract all TRIGs from both sensors respectively and get its mean timestamp
+        # return start/stop variable as input for logging
 
 
     def get_evaluated_sensor_trigs():
