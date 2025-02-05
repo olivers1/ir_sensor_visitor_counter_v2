@@ -83,15 +83,12 @@ class SensorHandler:
         self.sensor_log_sample_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
         
     def register_log_sample(self, sensor_id, value: int, timestamp: int, trig_state: SensorTrigState):
-        # print(np.shape(self.sensor_log_sample_array))
-        # print(self.sensor_log_sample_array)
-        
         # check if there are any empty columns to store sample in, otherwise create more columns
         # check only when all sensors have stored their data samples, first sensor_id is zero '0'
         if(sensor_id == self.number_of_sensors - 1):
             #print(np.shape(self.sensor_log_sample_array)[1])
-            if(np.shape(self.sensor_log_sample_array)[1] <= self.index_counter + 1):
-                new_columns = self.create_log_sample_array(self.number_of_sensors, 1)   # create one extra column
+            if(np.shape(self.sensor_log_sample_array)[1] <= self.index_counter + 1):    # check if all array columns are occupied
+                new_columns = self.create_log_sample_array(self.number_of_sensors, 1)   # create an extra column
                 self.sensor_log_sample_array = np.append(self.sensor_log_sample_array, new_columns, 1)
             
         self.sensor_log_sample_array[sensor_id][self.index_counter].set_sample(value, timestamp, trig_state)
@@ -103,7 +100,7 @@ class SensorHandler:
         return self.index_counter
 
     def create_log_sample_array(self, number_of_sensors: int, num_of_columns):
-        return np.array([[SensorSample()] * self.num_sample_columns] * self.number_of_sensors)
+        return np.array([[SensorSample() for _ in range(num_of_columns)] for _ in range(number_of_sensors)])    # create an number_of_sensors dimensional array
                                 
     def get_log_sample(self, sensor_id, sample_index):
         return self.sensor_log_sample_array[sensor_id][sample_index]
@@ -120,7 +117,7 @@ class TrigEvaluator:
         self.initial_num_sample_columns = 1     # specifies number of columns for the initial log array
         self.readout_frequency = 0.5     # Hz
         self.index_counter = 0      # current index of sensor_log_sample_array
-        self.num_consecutive_trigs = 6      # number of sensor trigs in a consecutive order to count it as a trig 
+        self.num_consecutive_trigs = 2      # number of sensor trigs in a consecutive order to count it as a trig
 
         self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns)
     
@@ -131,11 +128,29 @@ class TrigEvaluator:
         while(True):
             for sensor_id, sensor in enumerate(self.sensors):
                 self.index_counter = self.sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
-                print(f"({int(sensor_id)}, {self.index_counter})")
+                print(f"(sensor_id, index_counter: {int(sensor_id)}, {self.index_counter})")
                 print(self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].value, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].timestamp, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].trig_state.name)
 
             time.sleep(1/self.readout_frequency) # setting periodic time for sensor readout
+            # print("get_log_sample")
+            # test = self.sensor_handler.get_log_sample(0, 0)
+            # print(test.value, test.timestamp, test.trig_state.name)
+
+            if(self.index_counter >= self.num_consecutive_trigs):
+                self.get_sensor_trig_start_stop()
     
+    def get_sensor_trig_start_stop(self):
+        # list to evaluate 
+        temp_list = self.sensor_handler.create_log_sample_array(self.number_of_sensors, self.num_consecutive_trigs)
+
+        for sensor_id in range(self.number_of_sensors):
+            for temp_list_index in range(1, self.num_consecutive_trigs):
+                temp_list[sensor_id][temp_list_index] = self.sensor_handler.get_log_sample(sensor_id, self.index_counter - temp_list_index)
+            print("temp_list")
+            print(temp_list)
+                
+
+
     def get_evaluated_sensor_trigs():
         # go through the sensor_sample_logs_array samples for each sensor
         # identify when there are a number of samples in row that matches the num_consecutive_trigs variable
