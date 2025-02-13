@@ -82,7 +82,7 @@ class SensorHandler:
         
         self.index_counter = 0
         self.sensor_log_sample_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
-        self.consecutive_num_trigs_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
+        self.consecutive_num_trigs_array = self.create_log_sample_array(self.number_of_sensors, self.num_consecutive_trigs)
         
     def register_log_sample(self, sensor_id, value: int, timestamp: int, trig_state: SensorTrigState):
         # check if there are any empty columns to store sample in, otherwise create more columns
@@ -102,7 +102,7 @@ class SensorHandler:
         return self.index_counter
 
     def create_log_sample_array(self, number_of_sensors: int, num_of_columns):
-        return np.array([[SensorSample() for _ in range(num_of_columns)] for _ in range(number_of_sensors)])    # create an number_of_sensors dimensional array
+        return np.array([[SensorSample() for _ in range(num_of_columns)] for _ in range(number_of_sensors)], dtype=object)    # create an number_of_sensors dimensional array
                                 
     def get_log_sample(self, sensor_id, sample_index):
         return self.sensor_log_sample_array[sensor_id][sample_index]
@@ -111,7 +111,14 @@ class SensorHandler:
         return self.sensor_log_sample_array
 
 
-class TrigEvaluator:
+class AppLoggingState(Enum):
+    INIT = 0
+    IDLE = 1
+    LOGGING = 2
+    EVALUATING_RESULT = 3
+
+
+class TrigEvaluationManager:
     def __init__(self):
         self.sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
         self.number_of_sensors = 2
@@ -119,34 +126,55 @@ class TrigEvaluator:
         self.initial_num_sample_columns = 1     # specifies number of columns for the initial log array
         self.readout_frequency = 0.5     # Hz
         self.index_counter = 0      # current index of sensor_log_sample_array
-        self.num_consecutive_trigs = 2      # number of sensor trigs in a consecutive order to count it as a trig
+        self.num_consecutive_trigs = 3      # number of sensor trigs in a consecutive order to count it as a trig
 
+        self.app_logging_state = AppLoggingState.INIT   # initial app logging state
         self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
     
     def run(self):
         for sensor_id in range(self.number_of_sensors):
             self.sensors.append(IrSensor(sensor_id, self.sensor_trig_threshold))
     
-        while(True):
+        while(True):    # add while(self.app_logging_state == AppLoggingState.LOGGING)
             for sensor_id, sensor in enumerate(self.sensors):
                 self.index_counter = self.sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
                 print(f"(sensor_id, index_counter: {int(sensor_id)}, {self.index_counter})")
                 print(self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].value, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].timestamp, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].trig_state.name)
 
             time.sleep(1/self.readout_frequency) # setting periodic time for sensor readout
-            # print("get_log_sample")
-            # test = self.sensor_handler.get_log_sample(0, 0)
-            # print(test.value, test.timestamp, test.trig_state.name)
+            #print("get_log_sample")
+            #print(self.sensor_handler.get_log_sample(0, 0).value)
 
             if(self.index_counter >= self.num_consecutive_trigs):
-                self.get_sensor_trig_start_stop()
+                self.start_stop_logging()
     
-    def get_sensor_trig_start_stop(self):
+    def start_stop_logging(self):
         # add samples to consecutive_num_trigs_array
         for sensor_id in range(self.number_of_sensors):
-            for list_index in range(self.num_consecutive_trigs - 1):
+            for list_index in range(self.num_consecutive_trigs):
                 self.sensor_handler.consecutive_num_trigs_array[sensor_id][list_index] = self.sensor_handler.get_log_sample(sensor_id, self.index_counter - list_index)
-            #print(self.sensor_handler.consecutive_num_trigs_array)
+        
+        # verify if all elements in each row have the same trig state
+        verified_sensor_trig_states = []
+        for sensor_id in range(self.number_of_sensors):
+            ref_item = self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name    # reference value to compare with the other list items
+            all_elements_are_same = True
+            for iy, ix in np.ndindex(self.sensor_handler.consecutive_num_trigs_array.shape):
+                ix = sensor_id
+                if self.sensor_handler.consecutive_num_trigs_array[iy, ix].trig_state.name != ref_item:
+                    all_elements_are_same = False   # set boolean to False
+                    break
+            
+            verified_sensor_trig_states.append(all_elements_are_same)
+        print(verified_sensor_trig_states)
+
+        #print(np.all(self.sensor_handler.consecutive_num_trigs_array.trig_state.name == self.sensor_handler.consecutive_num_trigs_array[0][0].trig_state.name, axis=1))
+        for iy, ix in np.ndindex(self.sensor_handler.consecutive_num_trigs_array.shape):
+            print(self.sensor_handler.consecutive_num_trigs_array[iy, ix].trig_state.name)
+
+        # evaluate if all sensor trigs for each sensor are the same in sample
+
+
         
         # evaluate the consecutive_num_trigs_array to find all items in list to be TRIG or NO_TRIG
         # when all TRIGs start storing values into main log array and when all are NO_TRIGs enter an evaluation func 
@@ -181,7 +209,7 @@ class TrigEvaluator:
 
 def main():
 
-    app = TrigEvaluator()
+    app = TrigEvaluationManager()
     app.run()
 
 
