@@ -54,6 +54,11 @@ class SensorSample:
     def get_sample(self):
         return self.value, self.timestamp, self.trig_state
 
+    def __eq__(self, other):    # used by np.all() to verify if trig_state for all elements in each row have the same value
+        if isinstance(other, SensorSample):
+            return self.trig_state == other.trig_state
+        return False
+
 
 class IrSensor:
     def __init__(self, mcp_channel :int, sensor_trig_threshold: int):
@@ -127,10 +132,11 @@ class TrigEvaluationManager:
         self.readout_frequency = 0.5     # Hz
         self.index_counter = 0      # current index of sensor_log_sample_array
         self.num_consecutive_trigs = 3      # number of sensor trigs in a consecutive order to count it as a trig
+        self.current_state = AppLoggingState.INIT
 
         self.app_logging_state = AppLoggingState.INIT   # initial app logging state
         self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
-    
+
     def run(self):
         for sensor_id in range(self.number_of_sensors):
             self.sensors.append(IrSensor(sensor_id, self.sensor_trig_threshold))
@@ -142,8 +148,6 @@ class TrigEvaluationManager:
                 print(self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].value, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].timestamp, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].trig_state.name)
 
             time.sleep(1/self.readout_frequency) # setting periodic time for sensor readout
-            #print("get_log_sample")
-            #print(self.sensor_handler.get_log_sample(0, 0).value)
 
             if(self.index_counter >= self.num_consecutive_trigs):
                 self.start_stop_logging()
@@ -155,20 +159,17 @@ class TrigEvaluationManager:
                 self.sensor_handler.consecutive_num_trigs_array[sensor_id][list_index] = self.sensor_handler.get_log_sample(sensor_id, self.index_counter - list_index)
         
         # verify if all elements in each row have the same trig state
-        verified_sensor_trig_states = []
-        for sensor_id in range(self.number_of_sensors):
-            ref_item = self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name    # reference value to compare with the other list items
-            all_elements_are_same = True
-            for iy, ix in np.ndindex(self.sensor_handler.consecutive_num_trigs_array.shape):
-                ix = sensor_id
-                if self.sensor_handler.consecutive_num_trigs_array[iy, ix].trig_state.name != ref_item:
-                    all_elements_are_same = False   # set boolean to False
-                    break
-            
-            verified_sensor_trig_states.append(all_elements_are_same)
-        print(verified_sensor_trig_states)
+        row_check = np.all(self.sensor_handler.consecutive_num_trigs_array == self.sensor_handler.consecutive_num_trigs_array[:, [0]], axis=1)
+        print(row_check)
 
-        #print(np.all(self.sensor_handler.consecutive_num_trigs_array.trig_state.name == self.sensor_handler.consecutive_num_trigs_array[0][0].trig_state.name, axis=1))
+        if(np.all(row_check) == True):
+            self.current_state = AppLoggingState.LOGGING
+        else:
+            self.current_state = AppLoggingState.IDLE
+        
+        print("current_state: ", self.current_state)
+            
+        # print trig_state for all elements of the 2d-array
         for iy, ix in np.ndindex(self.sensor_handler.consecutive_num_trigs_array.shape):
             print(self.sensor_handler.consecutive_num_trigs_array[iy, ix].trig_state.name)
 
