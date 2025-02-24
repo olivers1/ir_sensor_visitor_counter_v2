@@ -120,7 +120,7 @@ class AppLoggingState(Enum):
     INIT = 0
     IDLE = 1
     LOGGING = 2
-    EVALUATING_RESULT = 3
+    RESULT_EVALUATION = 3
 
 
 class TrigEvaluationManager:
@@ -158,23 +158,50 @@ class TrigEvaluationManager:
             for list_index in range(self.num_consecutive_trigs):
                 self.sensor_handler.consecutive_num_trigs_array[sensor_id][list_index] = self.sensor_handler.get_log_sample(sensor_id, self.index_counter - list_index)
         
-        # verify if all elements in each row have the same trig state
-        row_check = np.all(self.sensor_handler.consecutive_num_trigs_array == self.sensor_handler.consecutive_num_trigs_array[:, [0]], axis=1)
-        print(row_check)
-
-        if(np.all(row_check) == True):
-            self.current_state = AppLoggingState.LOGGING
-        else:
-            self.current_state = AppLoggingState.IDLE
-        
-        print("current_state: ", self.current_state)
-            
         # print trig_state for all elements of the 2d-array
         for iy, ix in np.ndindex(self.sensor_handler.consecutive_num_trigs_array.shape):
             print(self.sensor_handler.consecutive_num_trigs_array[iy, ix].trig_state.name)
 
-        # evaluate if all sensor trigs for each sensor are the same in sample
+        # verify if all elements in each row have the same trig state
+        row_check = np.all(self.sensor_handler.consecutive_num_trigs_array == self.sensor_handler.consecutive_num_trigs_array[:, [0]], axis=1)
+        print("general_result:", row_check)
 
+        # verify that sensor trigs are stable (consecutive trigs have the same value)
+        if(np.all(row_check) == True):
+            if(self.current_state == AppLoggingState.INIT):
+                self.current_state = AppLoggingState.IDLE
+                print("current_state: ", self.current_state)
+
+            elif(self.current_state == AppLoggingState.IDLE):
+                for sensor_id in range(self.number_of_sensors):
+                    # verify that any of the sensors are trigged to start the logging
+                    if(self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name == SensorTrigState.TRIG.name):
+                        # start logging
+                        self.current_state = AppLoggingState.LOGGING
+                        print("current_state: ", self.current_state)
+                        
+                        # free up memory by clearing both arrays
+                        #del self.sensor_handler.sensor_log_sample_array
+                        #del self.sensor_handler.consecutive_num_trigs_array
+                        # add the array creating part of code in sensor handler to a function that is called from here and in its init() function
+                        break
+            
+            elif(self.current_state == AppLoggingState.LOGGING):
+                # Specific value to compare against
+                specific_value = SensorTrigState.NO_TRIG  # Change this to any value you want
+
+                # Extract the 'value' attribute
+                attribute_values = np.vectorize(lambda obj: obj.trig_state)(self.sensor_handler.consecutive_num_trigs_array)
+
+                # Check if all elements in each row match the specific value
+                row_check = np.all(attribute_values == specific_value, axis=1)
+                print("logging_result:", row_check)
+                
+            
+                    
+
+
+            
 
         
         # evaluate the consecutive_num_trigs_array to find all items in list to be TRIG or NO_TRIG
