@@ -133,6 +133,8 @@ class TrigEvaluationManager:
         self.index_counter = 0      # current index of sensor_log_sample_array
         self.num_consecutive_trigs = 3      # number of sensor trigs in a consecutive order to count it as a trig
         self.current_state = AppLoggingState.INIT
+        self.index_log_start = 0
+        self.index_log_stop = 0
 
         self.app_logging_state = AppLoggingState.INIT   # initial app logging state
         self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
@@ -151,6 +153,14 @@ class TrigEvaluationManager:
 
             if(self.index_counter >= self.num_consecutive_trigs):
                 self.start_stop_logging()
+            
+            # analyse result to detect exit/entry motion
+            if(self.current_state == AppLoggingState.RESULT_EVALUATION):
+                pass
+                self.get_sensor_timestamp_mean_value() # call function
+
+
+            
     
     def start_stop_logging(self):
         # add samples to consecutive_num_trigs_array
@@ -180,6 +190,9 @@ class TrigEvaluationManager:
                         self.current_state = AppLoggingState.LOGGING
                         print("current_state: ", self.current_state)
                         
+                        # store start index of logging episode
+                        self.index_log_start = self.index_counter
+                        
                         # free up memory by clearing both arrays
                         #del self.sensor_handler.sensor_log_sample_array
                         #del self.sensor_handler.consecutive_num_trigs_array
@@ -196,28 +209,14 @@ class TrigEvaluationManager:
                 # Check if all elements in each row match the specific value
                 row_check = np.all(attribute_values == specific_value, axis=1)
                 print("logging_result:", row_check)
-                
-            
-                    
-
-
-            
-
-        
-        # evaluate the consecutive_num_trigs_array to find all items in list to be TRIG or NO_TRIG
-        # when all TRIGs start storing values into main log array and when all are NO_TRIGs enter an evaluation func 
-        # to extract all TRIGs from both sensors respectively and get its mean timestamp
-        # return start/stop variable as input for logging
-
-
-    def get_evaluated_sensor_trigs():
-        # go through the sensor_sample_logs_array samples for each sensor
-        # identify when there are a number of samples in row that matches the num_consecutive_trigs variable
-        # when a series of trigs have been identified, store timestamp mean value (key) and trig state (value) to a new dict for each of the sensors
-        pass
+                if(np.all(row_check) == True):
+                    self.current_state = AppLoggingState.RESULT_EVALUATION
+                    print("current_state: ", self.current_state)
+                    # store stop index of logging episode
+                    self.index_log_stop = self.index_counter
 
     def get_sensor_timestamp_mean_value(self):
-        # extract TRIG timestamp from sensor_log_sample_array from each sensor and add data to a new array for each sensor
+        # extract TRIG timestamp from sensor_log_sample_array (log_start - log_stop) from each sensor and add data to a new array for each sensor
         # calculate timestamp mean value for each sensor
         # store mean values for all sensors in a dict accessable within this class
         # return dict with (key: value) sensor_id: timestamp_mean_value
