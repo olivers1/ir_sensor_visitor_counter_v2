@@ -154,10 +154,10 @@ class TrigEvaluationManager:
             if(self.index_counter >= self.num_consecutive_trigs):
                 self.start_stop_logging()
             
-            # analyse result to detect exit/entry motion
-            if(self.current_state == AppLoggingState.RESULT_EVALUATION):
-                pass
-                self.get_sensor_timestamp_mean_value() # call function
+            # # analyse result to detect exit/entry motion
+            # if(self.current_state == AppLoggingState.RESULT_EVALUATION):
+            #     pass
+            #     self.get_sensor_timestamp_mean_value() # call function
 
 
             
@@ -174,7 +174,7 @@ class TrigEvaluationManager:
 
         # verify if all elements in each row have the same trig state
         row_check = np.all(self.sensor_handler.consecutive_num_trigs_array == self.sensor_handler.consecutive_num_trigs_array[:, [0]], axis=1)
-        print("general_result:", row_check)
+        print("same_trig_result:", row_check)
 
         # verify that sensor trigs are stable (consecutive trigs have the same value)
         if(np.all(row_check) == True):
@@ -190,7 +190,7 @@ class TrigEvaluationManager:
                         self.current_state = AppLoggingState.LOGGING
                         print("current_state: ", self.current_state)
                         
-                        # store start index of logging episode
+                        # store start index of the active logging episode
                         self.index_log_start = self.index_counter
                         
                         # free up memory by clearing both arrays
@@ -200,27 +200,60 @@ class TrigEvaluationManager:
                         break
             
             elif(self.current_state == AppLoggingState.LOGGING):
-                # Specific value to compare against
-                specific_value = SensorTrigState.NO_TRIG  # Change this to any value you want
+                # detect when to stop logging when both sensors are verified to be in a NO_TRIG state
+                specific_value = SensorTrigState.NO_TRIG 
 
                 # Extract the 'value' attribute
                 attribute_values = np.vectorize(lambda obj: obj.trig_state)(self.sensor_handler.consecutive_num_trigs_array)
 
                 # Check if all elements in each row match the specific value
                 row_check = np.all(attribute_values == specific_value, axis=1)
-                print("logging_result:", row_check)
+                print("sensor_no_trig_result:", row_check)
                 if(np.all(row_check) == True):
                     self.current_state = AppLoggingState.RESULT_EVALUATION
                     print("current_state: ", self.current_state)
-                    # store stop index of logging episode
+                    # store stop index of the active logging episode
                     self.index_log_stop = self.index_counter
+            
+            elif(self.current_state == AppLoggingState.RESULT_EVALUATION):
+                print(f"logged data at index: ({self.index_log_start, self.index_log_stop})")
+                # create array to store the TRIG timestamps
+                timestamp_array = np.zeros((self.number_of_sensors, abs(self.index_log_start - self.index_log_stop)), dtype=int)
+                
+                for sensor_id in range(self.number_of_sensors):
+                    for list_index in range(abs(self.index_log_start - self.index_log_stop)):
+                        if(self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name == SensorTrigState.TRIG.name):
+                            timestamp_array[sensor_id][list_index] = self.sensor_handler.get_log_sample(sensor_id, list_index).timestamp
+                        else:
+                            timestamp_array[sensor_id][list_index] = 0
+                        print(timestamp_array)
+                self.get_sensor_timestamp_mean_value(timestamp_array)
 
-    def get_sensor_timestamp_mean_value(self):
-        # extract TRIG timestamp from sensor_log_sample_array (log_start - log_stop) from each sensor and add data to a new array for each sensor
+    def get_sensor_timestamp_mean_value(self, timestamp_array):
+        # create sensor mean value dict
+        sensor_mean_value_dict = dict()
+
+        # for i in range(self.number_of_sensors):
+        #     key = "sensor{}".format(i)
+        #     value = 0
+        #     #sensor_mean_value_dict[key] = value
+        
+        
+        for sensor_id in range(self.number_of_sensors):
+            sum = 0
+            valid_timestamp_counter = 0
+            for value in timestamp_array[sensor_id]:
+                if(value != 0):
+                    valid_timestamp_counter += 1
+                sum += value
+            mean_value = sum / valid_timestamp_counter
+            sensor_mean_value_dict[sensor_id] = mean_value
+
+        return sensor_mean_value_dict
+
         # calculate timestamp mean value for each sensor
         # store mean values for all sensors in a dict accessable within this class
         # return dict with (key: value) sensor_id: timestamp_mean_value
-        pass
 
     def get_motion_direction(self, *args):
         # access dict with all sensors along with their timestamp mean values
