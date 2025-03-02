@@ -217,28 +217,28 @@ class TrigEvaluationManager:
             
             elif(self.current_state == AppLoggingState.RESULT_EVALUATION):
                 print(f"logged data at index: ({self.index_log_start, self.index_log_stop})")
-                # create array to store the TRIG timestamps
-                timestamp_array = np.zeros((self.number_of_sensors, abs(self.index_log_start - self.index_log_stop)), dtype=int)
+                # create array with shape based on number of sensors and logged samples to store the TRIG timestamps
+                timestamp_array = [[0 for _ in range(abs(self.index_log_start - self.index_log_stop))] for _ in range(self.number_of_sensors)]
+                #print(timestamp_array)
                 
                 for sensor_id in range(self.number_of_sensors):
-                    for list_index in range(abs(self.index_log_start - self.index_log_stop)):
-                        if(self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name == SensorTrigState.TRIG.name):
-                            timestamp_array[sensor_id][list_index] = self.sensor_handler.get_log_sample(sensor_id, list_index).timestamp
+                    timestamp_array_index = 0
+                    for list_index in range(self.index_log_start, self.index_log_stop):
+                        if(self.sensor_handler.sensor_log_sample_array[sensor_id][list_index].trig_state.name == SensorTrigState.TRIG.name):
+                            timestamp_array[sensor_id][timestamp_array_index] = self.sensor_handler.get_log_sample(sensor_id, list_index).timestamp
                         else:
-                            timestamp_array[sensor_id][list_index] = 0
+                            timestamp_array[sensor_id][timestamp_array_index] = 0
+                        # increase index
+                        timestamp_array_index += 1
                         print(timestamp_array)
+                        print("---")
+                        
                 self.get_sensor_timestamp_mean_value(timestamp_array)
 
     def get_sensor_timestamp_mean_value(self, timestamp_array):
-        # create sensor mean value dict
+        # create dict to store sensor mean time stamp value for each of the sensors
         sensor_mean_value_dict = dict()
 
-        # for i in range(self.number_of_sensors):
-        #     key = "sensor{}".format(i)
-        #     value = 0
-        #     #sensor_mean_value_dict[key] = value
-        
-        
         for sensor_id in range(self.number_of_sensors):
             sum = 0
             valid_timestamp_counter = 0
@@ -246,7 +246,12 @@ class TrigEvaluationManager:
                 if(value != 0):
                     valid_timestamp_counter += 1
                 sum += value
-            mean_value = sum / valid_timestamp_counter
+            # resolve ZeroDivisionError
+            if(valid_timestamp_counter != 0):
+                mean_value = sum / valid_timestamp_counter
+            else:
+                mean_value = 0
+
             sensor_mean_value_dict[sensor_id] = mean_value
 
         return sensor_mean_value_dict
