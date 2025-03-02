@@ -123,6 +123,12 @@ class AppLoggingState(Enum):
     RESULT_EVALUATION = 3
 
 
+class IdentifiedMotionDirection(Enum):
+    UNKNOWN = 0
+    EXIT = 1
+    ENTRY = 2
+
+
 class TrigEvaluationManager:
     def __init__(self):
         self.sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
@@ -153,13 +159,6 @@ class TrigEvaluationManager:
 
             if(self.index_counter >= self.num_consecutive_trigs):
                 self.start_stop_logging()
-            
-            # # analyse result to detect exit/entry motion
-            # if(self.current_state == AppLoggingState.RESULT_EVALUATION):
-            #     pass
-            #     self.get_sensor_timestamp_mean_value() # call function
-
-
             
     
     def start_stop_logging(self):
@@ -230,10 +229,11 @@ class TrigEvaluationManager:
                             timestamp_array[sensor_id][timestamp_array_index] = 0
                         # increase index
                         timestamp_array_index += 1
-                        print(timestamp_array)
-                        print("---")
+                print(timestamp_array)
                         
-                self.get_sensor_timestamp_mean_value(timestamp_array)
+                result = self.get_sensor_timestamp_mean_value(timestamp_array)
+                self.get_motion_direction(result)
+
 
     def get_sensor_timestamp_mean_value(self, timestamp_array):
         # create dict to store sensor mean time stamp value for each of the sensors
@@ -241,6 +241,7 @@ class TrigEvaluationManager:
 
         for sensor_id in range(self.number_of_sensors):
             sum = 0
+            mean_value = 0
             valid_timestamp_counter = 0
             for value in timestamp_array[sensor_id]:
                 if(value != 0):
@@ -248,19 +249,21 @@ class TrigEvaluationManager:
                 sum += value
             # resolve ZeroDivisionError
             if(valid_timestamp_counter != 0):
-                mean_value = sum / valid_timestamp_counter
+                mean_value = round(sum / valid_timestamp_counter)
             else:
                 mean_value = 0
-
-            sensor_mean_value_dict[sensor_id] = mean_value
+            # insert sensor id along with its mean timestamp in dict
+            sensor_mean_value_dict["sensor" + str(sensor_id)] = mean_value
+        # print dict
+        for key, value in sensor_mean_value_dict.items():
+            print(f"{key}: {sensor_mean_value_dict[key]}")
 
         return sensor_mean_value_dict
 
-        # calculate timestamp mean value for each sensor
-        # store mean values for all sensors in a dict accessable within this class
-        # return dict with (key: value) sensor_id: timestamp_mean_value
 
-    def get_motion_direction(self, *args):
+    def get_motion_direction(self, trig_dict):
+        #IdentifiedMotionDirection
+        
         # access dict with all sensors along with their timestamp mean values
         # sensor_trigs = {}
         # for key, value in args.items():
