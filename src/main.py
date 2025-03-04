@@ -1,5 +1,6 @@
 import numpy as np
 from enum import Enum
+from pathlib import Path
 #from abc import ABC, abstractmethod
 #from inspect import signature
 import datetime
@@ -141,6 +142,8 @@ class TrigEvaluationManager:
         self.current_state = AppLoggingState.INIT
         self.index_log_start = 0
         self.index_log_stop = 0
+        self.identified_motion_direction = IdentifiedMotionDirection.UNKNOWN
+        self.file_name = "log_file_motion_direction.txt"
 
         self.app_logging_state = AppLoggingState.INIT   # initial app logging state
         self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
@@ -217,27 +220,29 @@ class TrigEvaluationManager:
             elif(self.current_state == AppLoggingState.RESULT_EVALUATION):
                 print(f"logged data at index: ({self.index_log_start, self.index_log_stop})")
                 # create array with shape based on number of sensors and logged samples to store the TRIG timestamps
-                timestamp_array = [[0 for _ in range(abs(self.index_log_start - self.index_log_stop))] for _ in range(self.number_of_sensors)]
+                self.timestamp_array = [[0 for _ in range(abs(self.index_log_start - self.index_log_stop))] for _ in range(self.number_of_sensors)]
                 #print(timestamp_array)
                 
                 for sensor_id in range(self.number_of_sensors):
                     timestamp_array_index = 0
                     for list_index in range(self.index_log_start, self.index_log_stop):
                         if(self.sensor_handler.sensor_log_sample_array[sensor_id][list_index].trig_state.name == SensorTrigState.TRIG.name):
-                            timestamp_array[sensor_id][timestamp_array_index] = self.sensor_handler.get_log_sample(sensor_id, list_index).timestamp
+                            self.timestamp_array[sensor_id][timestamp_array_index] = self.sensor_handler.get_log_sample(sensor_id, list_index).timestamp
                         else:
-                            timestamp_array[sensor_id][timestamp_array_index] = 0
+                            self.timestamp_array[sensor_id][timestamp_array_index] = 0
+
                         # increase index
                         timestamp_array_index += 1
-                print(timestamp_array)
                         
-                result = self.get_sensor_timestamp_mean_value(timestamp_array)
-                self.get_motion_direction(result)
+                print(self.timestamp_array)
+                        
+                self.get_sensor_timestamp_mean_value(self.timestamp_array)
+                self.get_motion_direction()
 
 
     def get_sensor_timestamp_mean_value(self, timestamp_array):
         # create dict to store sensor mean time stamp value for each of the sensors
-        sensor_mean_value_dict = dict()
+        self.sensor_mean_value_dict = dict()
 
         for sensor_id in range(self.number_of_sensors):
             sum = 0
@@ -253,26 +258,55 @@ class TrigEvaluationManager:
             else:
                 mean_value = 0
             # insert sensor id along with its mean timestamp in dict
-            sensor_mean_value_dict["sensor" + str(sensor_id)] = mean_value
+            self.sensor_mean_value_dict["sensor" + str(sensor_id)] = mean_value
         # print dict
-        for key, value in sensor_mean_value_dict.items():
-            print(f"{key}: {sensor_mean_value_dict[key]}")
-
-        return sensor_mean_value_dict
+        for key, value in self.sensor_mean_value_dict.items():
+            print(f"{key}: {self.sensor_mean_value_dict[key]}")
 
 
-    def get_motion_direction(self, trig_dict):
-        #IdentifiedMotionDirection
+    def write_to_log_file(self, trig_dict, motion_mean_value):
+        # create or append to log file
+        with open(self.file_name, "a") as f:
+            f.write('{} : {}\n'.format(str(motion_mean_value), str(self.identified_motion_direction)))
+            for key, value in trig_dict.items():
+                f.write('{}: {}\n'.format(key,  str(trig_dict[key])))
+
+
+    def get_motion_direction(self):
+        # verify that both sensors have been trigged
+        if(self.sensor_mean_value_dict["sensor0"] > 0 and self.sensor_mean_value_dict["sensor1"] > 0):
+            # check which sensor that trigged first
+            if(self.sensor_mean_value_dict["sensor0"] < self.sensor_mean_value_dict["sensor1"]):
+                self.identified_motion_direction = IdentifiedMotionDirection.EXIT
+            elif(self.sensor_mean_value_dict["sensor0"] > self.sensor_mean_value_dict["sensor1"]):
+                self.identified_motion_direction = IdentifiedMotionDirection.ENTRY
+        else:
+            self.identified_motion_direction = IdentifiedMotionDirection.UNKNOWN
+
+        print("identified_motion_direction:", self.identified_motion_direction)
+
+        # get summarized mean value
+        mean_value = 0
+        mean_value_trig = 0
+        for key, value in self.sensor_mean_value_dict.items():
+            if(self.sensor_mean_value_dict[key] != 0):
+                mean_value_trig += 1
+            motion_mean_value = self.sensor_mean_value_dict[key]
         
-        # access dict with all sensors along with their timestamp mean values
-        # sensor_trigs = {}
-        # for key, value in args.items():
-        #     print(key, value)
-        #     sensor_trigs[key] = value
+        motion_mean_value /= mean_value_trig
 
-        # sort dictionary to determine which of the sensors that trigged first  sorted_dict = dict(sorted(my_dict.items()))
-        # add if statement to determine which if an entry or exit was detected
-        pass
+        # write to log file
+        self.write_to_log_file(self.sensor_mean_value_dict, motion_mean_value)
+
+        # reset logging state and logged parameters
+        self.index_log_start = 0
+        self.index_log_stop = 0
+        self.current_state = AppLoggingState.IDLE
+        print("current_state: ", self.current_state)
+
+
+
+    
     
 
 def main():
