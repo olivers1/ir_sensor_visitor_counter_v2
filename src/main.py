@@ -269,7 +269,7 @@ class TrigEvaluationManager:
         with open(self.file_name, "a") as f:
             f.write('{} : {}\n'.format(str(motion_mean_value), str(self.identified_motion_direction)))
             for key, value in trig_dict.items():
-                f.write('{}: {}\n'.format(key,  str(trig_dict[key])))
+                f.write('{} : {}\n'.format(key,  str(trig_dict[key])))
 
 
     def get_motion_direction(self):
@@ -285,15 +285,14 @@ class TrigEvaluationManager:
 
         print("identified_motion_direction:", self.identified_motion_direction)
 
-        # get summarized mean value
+        # get summarized mean timestamp value from dictionary that only contains valid (!= 0) timestamps
         mean_value = 0
-        mean_value_trig = 0
+        num_values = 0
         for key, value in self.sensor_mean_value_dict.items():
-            if(self.sensor_mean_value_dict[key] != 0):
-                mean_value_trig += 1
-            motion_mean_value = self.sensor_mean_value_dict[key]
+            mean_value += self.sensor_mean_value_dict[key]
+            num_values += 1
         
-        motion_mean_value /= mean_value_trig
+        motion_mean_value = round(mean_value / num_values)
 
         # write to log file
         self.write_to_log_file(self.sensor_mean_value_dict, motion_mean_value)
@@ -304,9 +303,6 @@ class TrigEvaluationManager:
         self.current_state = AppLoggingState.IDLE
         print("current_state: ", self.current_state)
 
-
-
-    
     
 
 def main():
