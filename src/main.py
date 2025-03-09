@@ -87,6 +87,9 @@ class SensorHandler:
         self.num_consecutive_trigs = num_consecutive_trigs
         
         self.index_counter = 0
+        self.create_log_arrays()  # create log arrays to store log samples
+
+    def create_log_arrays(self):
         self.sensor_log_sample_array = self.create_log_sample_array(self.number_of_sensors, self.num_sample_columns)
         self.consecutive_num_trigs_array = self.create_log_sample_array(self.number_of_sensors, self.num_consecutive_trigs)
         
@@ -142,6 +145,10 @@ class TrigEvaluationManager:
         self.current_state = AppLoggingState.INIT
         self.index_log_start = 0
         self.index_log_stop = 0
+        self.valid_sensor_trigs = []
+        for index in range(self.number_of_sensors):
+            self.valid_sensor_trigs.append(False)
+
         self.identified_motion_direction = IdentifiedMotionDirection.UNKNOWN
         self.file_name = "log_file_motion_direction.txt"
 
@@ -200,9 +207,23 @@ class TrigEvaluationManager:
                         
                         # store start index of the active logging episode
                         self.index_log_start = self.index_counter
+
+                        # write to list that contains details of which of the all sensors that have had valid trigs
+                        self.valid_sensor_trigs[sensor_id] = True
                         break
+                print("valid_sensor_trigs:", self.valid_sensor_trigs)
             
             elif(self.current_state == AppLoggingState.LOGGING):
+                for sensor_id in range(self.number_of_sensors):
+                    if(self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name == SensorTrigState.TRIG.name):
+                        # logging started popluate list when sensors get valid trigs
+                        print("current_state: ", self.current_state)
+                            
+                        # write to list that contains details of which of the all sensors that have achieved valid trigs during tyhe logging session
+                        self.valid_sensor_trigs[sensor_id] = True
+
+                print("valid_sensor_trigs:", self.valid_sensor_trigs)
+                
                 # detect when to stop logging when both sensors are verified to be in a NO_TRIG state
                 specific_value = SensorTrigState.NO_TRIG 
 
@@ -219,7 +240,9 @@ class TrigEvaluationManager:
                     self.index_log_stop = self.index_counter
             
             elif(self.current_state == AppLoggingState.RESULT_EVALUATION):
+                print("current_state: ", self.current_state)
                 print(f"logged data at index: ({self.index_log_start, self.index_log_stop})")
+                print("valid_sensor_trigs:", self.valid_sensor_trigs)
                 # create array with shape based on number of sensors and logged samples to store the TRIG timestamps
                 self.timestamp_array = [[0 for _ in range(abs(self.index_log_start - self.index_log_stop))] for _ in range(self.number_of_sensors)]
                 #print(timestamp_array)
@@ -268,19 +291,20 @@ class TrigEvaluationManager:
     def write_to_log_file(self, trig_dict, motion_mean_value):
         # create or append to log file
         with open(self.file_name, "a") as f:
-            f.write('{} : {}\n'.format(str(motion_mean_value), str(self.identified_motion_direction)))
+            f.write('{} : {}\n'.format(str(motion_mean_value), str(self.identified_motion_direction.name)))
             for key, value in trig_dict.items():
                 f.write('  {} : {}\n'.format(key,  str(trig_dict[key])))
 
 
     def get_motion_direction(self):
-        # verify that both sensors have been trigged
-        if(self.sensor_mean_value_dict["sensor0"] > 0 and self.sensor_mean_value_dict["sensor1"] > 0):
-            # check which sensor that trigged first
-            if(self.sensor_mean_value_dict["sensor0"] < self.sensor_mean_value_dict["sensor1"]):
-                self.identified_motion_direction = IdentifiedMotionDirection.EXIT
-            elif(self.sensor_mean_value_dict["sensor0"] > self.sensor_mean_value_dict["sensor1"]):
-                self.identified_motion_direction = IdentifiedMotionDirection.ENTRY
+        # verify that both sensors have been trigged otherwise motion is classified as UNKNOWN
+        if(all(self.valid_sensor_trigs) == True):
+            if(self.sensor_mean_value_dict["sensor0"] > 0 and self.sensor_mean_value_dict["sensor1"] > 0):
+                # check which sensor that trigged first
+                if(self.sensor_mean_value_dict["sensor0"] < self.sensor_mean_value_dict["sensor1"]):
+                    self.identified_motion_direction = IdentifiedMotionDirection.EXIT
+                elif(self.sensor_mean_value_dict["sensor0"] > self.sensor_mean_value_dict["sensor1"]):
+                    self.identified_motion_direction = IdentifiedMotionDirection.ENTRY
         else:
             self.identified_motion_direction = IdentifiedMotionDirection.UNKNOWN
 
@@ -290,8 +314,10 @@ class TrigEvaluationManager:
         mean_value = 0
         num_values = 0
         for key, value in self.sensor_mean_value_dict.items():
-            mean_value += self.sensor_mean_value_dict[key]
-            num_values += 1
+            # verifiy that timestamps are valid when calculating average timestamp value
+            if(self.sensor_mean_value_dict[key] != 0):
+                mean_value += self.sensor_mean_value_dict[key]
+                num_values += 1
         
         motion_mean_value = round(mean_value / num_values)
 
@@ -303,8 +329,10 @@ class TrigEvaluationManager:
         self.index_log_stop = 0
 
         # free up memory by clearing both arrays
-        #del self.sensor_handler.sensor_log_sample_array
-        #del self.sensor_handler.consecutive_num_trigs_array
+        del self.sensor_handler.sensor_log_sample_array
+        del self.sensor_handler.consecutive_num_trigs_array
+        self.sensor_handler.index_counter = 0
+        self.sensor_handler.create_log_arrays()
 
         self.current_state = AppLoggingState.IDLE
         print("current_state: ", self.current_state)
@@ -315,29 +343,6 @@ def main():
 
     app = TrigEvaluationManager()
     app.run()
-
-
-    # sensor_trig_threshold = 800     # sensor digital value (0 - 1023) to represent IR-sensor detection, below threshold value == sensor trig
-    # number_of_sensors = 2
-    # sensors = []
-    # initial_num_sample_columns = 1
-    # readout_frequency = 0.5     # Hz
-
-    # for sensor_id in range(number_of_sensors):
-    #     sensors.append(IrSensor(sensor_id, sensor_trig_threshold))
-    
-    # sensor_handler = SensorHandler(number_of_sensors, initial_num_sample_columns)
-
-    
-    # while(True):
-    #     for sensor_id, sensor in enumerate(sensors):
-    #         index_counter = sensor_handler.register_log_sample(sensor_id, *sensor.get_sensor_data())    # '*' unpacks the return tuple from function call)
-    #         print(f"({int(sensor_id)}, {index_counter})")
-    #         print(sensor_handler.sensor_log_sample_array[sensor_id][index_counter].value, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].timestamp, sensor_handler.sensor_log_sample_array[sensor_id][index_counter].trig_state.name)
-
-    #     time.sleep(1/readout_frequency) # setting periodic time for sensor readout
-
-
 
 if __name__ == "__main__":
    main()
