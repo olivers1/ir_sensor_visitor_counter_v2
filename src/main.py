@@ -124,7 +124,7 @@ class AppLoggingState(Enum):
     INIT = 0
     IDLE = 1
     LOGGING = 2
-    RESULT_EVALUATION = 3
+    LOG_EVALUATION = 3
 
 
 class IdentifiedMotionDirection(Enum):
@@ -139,7 +139,7 @@ class TrigEvaluationManager:
         self.number_of_sensors = 2
         self.sensors = []   # list containing all sensors
         self.initial_num_sample_columns = 1     # specifies number of columns for the initial log array
-        self.readout_frequency = 0.5     # Hz
+        self.readout_frequency = 0.5  # Hz
         self.index_counter = 0      # current index of sensor_log_sample_array
         self.num_consecutive_trigs = 3      # number of sensor trigs in a consecutive order to count it as a trig
         self.current_state = AppLoggingState.INIT
@@ -170,8 +170,8 @@ class TrigEvaluationManager:
             # print trig_state for all elements of the 2d-array
             for iy, ix in np.ndindex(self.sensor_handler.consecutive_num_trigs_array.shape):
                 print(self.sensor_handler.consecutive_num_trigs_array[iy, ix].trig_state.name)
-            print("---before_start_stop---")
 
+            # start analysing logs after the consecutive_trigs array has been filled
             if(self.index_counter >= self.num_consecutive_trigs):
                 self.start_stop_logging()
             
@@ -181,11 +181,6 @@ class TrigEvaluationManager:
         for sensor_id in range(self.number_of_sensors):
             for list_index in range(self.num_consecutive_trigs):
                 self.sensor_handler.consecutive_num_trigs_array[sensor_id][list_index] = self.sensor_handler.get_log_sample(sensor_id, self.index_counter - list_index)
-        
-        # print trig_state for all elements of the 2d-array
-        for iy, ix in np.ndindex(self.sensor_handler.consecutive_num_trigs_array.shape):
-            print(self.sensor_handler.consecutive_num_trigs_array[iy, ix].trig_state.name)
-        print("---after_start_stop---")
 
         # check if trig state is stable by verifying that all elements in each row have the same trig state
         row_check = np.all(self.sensor_handler.consecutive_num_trigs_array == self.sensor_handler.consecutive_num_trigs_array[:, [0]], axis=1)
@@ -193,9 +188,9 @@ class TrigEvaluationManager:
 
         # if trig states are stable then go to IDLE state
         if(np.all(row_check) == True):
+            print("current_state [previous]:", self.current_state.name)
             if(self.current_state == AppLoggingState.INIT):
                 self.current_state = AppLoggingState.IDLE
-                print("current_state: ", self.current_state)
 
             elif(self.current_state == AppLoggingState.IDLE):
                 for sensor_id in range(self.number_of_sensors):
@@ -203,7 +198,6 @@ class TrigEvaluationManager:
                     if(self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name == SensorTrigState.TRIG.name):
                         # start logging
                         self.current_state = AppLoggingState.LOGGING
-                        print("current_state: ", self.current_state)
                         
                         # store start index of the active logging episode
                         self.index_log_start = self.index_counter
@@ -216,10 +210,7 @@ class TrigEvaluationManager:
             elif(self.current_state == AppLoggingState.LOGGING):
                 for sensor_id in range(self.number_of_sensors):
                     if(self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name == SensorTrigState.TRIG.name):
-                        # logging started popluate list when sensors get valid trigs
-                        print("current_state: ", self.current_state)
-                            
-                        # write to list that contains details of which of the all sensors that have achieved valid trigs during tyhe logging session
+                        # logging started popluate list for each that have had a valid trig (num consecutive trigs)
                         self.valid_sensor_trigs[sensor_id] = True
 
                 print("valid_sensor_trigs:", self.valid_sensor_trigs)
@@ -234,13 +225,13 @@ class TrigEvaluationManager:
                 row_check = np.all(attribute_values == specific_value, axis=1)
                 print("sensor_no_trig_result:", row_check)
                 if(np.all(row_check) == True):
-                    self.current_state = AppLoggingState.RESULT_EVALUATION
-                    print("current_state: ", self.current_state)
+                    # start logging
+                    self.current_state = AppLoggingState.LOG_EVALUATION
                     # store stop index of the active logging episode
                     self.index_log_stop = self.index_counter
             
-            elif(self.current_state == AppLoggingState.RESULT_EVALUATION):
-                print("current_state: ", self.current_state)
+            elif(self.current_state == AppLoggingState.LOG_EVALUATION):
+                print("current_state [current]:", self.current_state.name)
                 print(f"logged data at index: ({self.index_log_start, self.index_log_stop})")
                 print("valid_sensor_trigs:", self.valid_sensor_trigs)
                 # create array with shape based on number of sensors and logged samples to store the TRIG timestamps
@@ -262,6 +253,8 @@ class TrigEvaluationManager:
                         
                 self.get_sensor_timestamp_mean_value(self.timestamp_array)
                 self.get_motion_direction()
+            
+            print("current_state [current]:", self.current_state.name)
 
 
     def get_sensor_timestamp_mean_value(self, timestamp_array):
@@ -308,7 +301,7 @@ class TrigEvaluationManager:
         else:
             self.identified_motion_direction = IdentifiedMotionDirection.UNKNOWN
 
-        print("identified_motion_direction:", self.identified_motion_direction)
+        print("identified_motion_direction:", self.identified_motion_direction.name)
 
         # get summarized mean timestamp value from dictionary that only contains valid (!= 0) timestamps
         mean_value = 0
@@ -329,13 +322,16 @@ class TrigEvaluationManager:
         self.index_log_stop = 0
 
         # free up memory by clearing both arrays
+        print("restore memory..")
         del self.sensor_handler.sensor_log_sample_array
         del self.sensor_handler.consecutive_num_trigs_array
         self.sensor_handler.index_counter = 0
         self.sensor_handler.create_log_arrays()
+        self.valid_sensor_trigs = [False for _ in self.valid_sensor_trigs]
+        print("valid_sensor_trigs:", self.valid_sensor_trigs)
 
         self.current_state = AppLoggingState.IDLE
-        print("current_state: ", self.current_state)
+        print("current_state:", self.current_state.name)
 
     
 
