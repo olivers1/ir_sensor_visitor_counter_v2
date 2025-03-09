@@ -3,7 +3,7 @@ from enum import Enum
 from pathlib import Path
 #from abc import ABC, abstractmethod
 #from inspect import signature
-import datetime
+from datetime import datetime
 
 # Import SPI library (for hardware SPI) and MCP3008 library.
 import Adafruit_GPIO.SPI as SPI
@@ -139,21 +139,24 @@ class TrigEvaluationManager:
         self.number_of_sensors = 2
         self.sensors = []   # list containing all sensors
         self.initial_num_sample_columns = 1     # specifies number of columns for the initial log array
-        self.readout_frequency = 0.5  # Hz
+        self.readout_frequency = 12  # Hz
         self.index_counter = 0      # current index of sensor_log_sample_array
-        self.num_consecutive_trigs = 3      # number of sensor trigs in a consecutive order to count it as a trig
+        self.num_consecutive_trigs = 5     # number of sensor trigs in a consecutive order to count it as a trig
         self.current_state = AppLoggingState.INIT
         self.index_log_start = 0
         self.index_log_stop = 0
+        self.identified_motion_direction = IdentifiedMotionDirection.UNKNOWN
+        self.app_logging_state = AppLoggingState.INIT   # initial app logging state
+        self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
+
         self.valid_sensor_trigs = []
         for index in range(self.number_of_sensors):
             self.valid_sensor_trigs.append(False)
 
-        self.identified_motion_direction = IdentifiedMotionDirection.UNKNOWN
-        self.file_name = "log_file_motion_direction.txt"
+        # create or append to log file with date time in its file name
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.log_filename = f"log_{timestamp}.txt"  
 
-        self.app_logging_state = AppLoggingState.INIT   # initial app logging state
-        self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
 
     def run(self):
         for sensor_id in range(self.number_of_sensors):
@@ -281,9 +284,9 @@ class TrigEvaluationManager:
             print(f"{key}: {self.sensor_mean_value_dict[key]}")
 
 
-    def write_to_log_file(self, trig_dict, motion_mean_value):
-        # create or append to log file
-        with open(self.file_name, "a") as f:
+    def write_to_log_file(self, trig_dict, motion_mean_value):  
+        # write to log file
+        with open(self.log_filename, "a") as f:
             f.write('{} : {}\n'.format(str(motion_mean_value), str(self.identified_motion_direction.name)))
             for key, value in trig_dict.items():
                 f.write('  {} : {}\n'.format(key,  str(trig_dict[key])))
