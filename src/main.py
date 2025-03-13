@@ -4,6 +4,8 @@ from pathlib import Path
 #from abc import ABC, abstractmethod
 #from inspect import signature
 from datetime import datetime
+import os.path
+from pathlib import Path
 
 # Import SPI library (for hardware SPI) and MCP3008 library.
 import Adafruit_GPIO.SPI as SPI
@@ -153,10 +155,12 @@ class TrigEvaluationManager:
         for index in range(self.number_of_sensors):
             self.valid_sensor_trigs.append(False)
 
-        # create or append to log file with date time in its file name
+        # reate or append to log file at specified path
+        save_path = Path(__file__).resolve().parents[1]
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.log_filename = f"log_{timestamp}.txt"  
-
+        filename = f"log_{timestamp}.txt"
+        self.log_filename = os.path.join(save_path, filename)    
+        
 
     def run(self):
         for sensor_id in range(self.number_of_sensors):
@@ -214,6 +218,10 @@ class TrigEvaluationManager:
             
             elif(self.current_state == AppLoggingState.LOGGING):
                 print("current_state [current]:", self.current_state.name)
+                for sensor_id, sensor in enumerate(self.sensors):
+                    print(f"(sensor_id, index_counter: {sensor_id}, {self.index_counter})")
+                    print(self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].value, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].timestamp, self.sensor_handler.sensor_log_sample_array[sensor_id][self.index_counter].trig_state.name)
+
                 for sensor_id in range(self.number_of_sensors):
                     if(self.sensor_handler.consecutive_num_trigs_array[sensor_id][0].trig_state.name == SensorTrigState.TRIG.name):
                         # logging started popluate list for each that have had a valid trig (num consecutive trigs)
