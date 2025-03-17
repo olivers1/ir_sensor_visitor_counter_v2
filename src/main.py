@@ -151,7 +151,10 @@ class TrigEvaluationManager:
         self.app_logging_state = AppLoggingState.INIT   # initial app logging state
         self.sensor_handler = SensorHandler(self.number_of_sensors, self.initial_num_sample_columns, self.num_consecutive_trigs)
         self.sensor_first_trigged = None    # hold the sensor id that trigged first when the logging was initiated
+        self.second_sensor_trigged_index = 0
         self.motion_direction_is_valid = False
+        self.timestamp_array = None
+        self.second_sensor_trig_timestamp_array = None
 
         self.valid_sensor_trigs = []
         for index in range(self.number_of_sensors):
@@ -294,9 +297,6 @@ class TrigEvaluationManager:
         # create a dict to store number of trig states for each of the sensors
         self.sensor_number_of_trigs = dict()
 
-        # create a dict to store number of trig states for each of the sensors
-        self.sensor_last_trig_timestamp = dict()
-
         for sensor_id in range(self.number_of_sensors):
             sum = 0
             mean_value = 0
@@ -304,9 +304,6 @@ class TrigEvaluationManager:
             for value in self.timestamp_array[sensor_id]:
                 if(value != 0):
                     valid_timestamp_counter += 1
-                    # add the timestamp for each sensor when it was last in trigged state
-                    # ==IMPROVE== by combining it with valid_sensor_trigs to get a verified trig state
-                    self.sensor_last_trig_timestamp["sensor" + str(sensor_id)] = value
                 sum += value
             # resolve ZeroDivisionError
             if(valid_timestamp_counter != 0):
@@ -326,10 +323,6 @@ class TrigEvaluationManager:
         for key, value in self.sensor_number_of_trigs.items():
             print(f"{key}: {self.sensor_number_of_trigs[key]}")
 
-        print("sensor_last_trig_timestamp:")
-        for key, value in self.sensor_last_trig_timestamp.items():
-            print(f"{key}: {self.sensor_last_trig_timestamp[key]}")
-    
 
     def validate_motion_direction(self):
         # validate the identified motion direction based on which of the sensors that trigged first and 
@@ -337,10 +330,10 @@ class TrigEvaluationManager:
 
         self.motion_direction_is_valid = False
         if(self.sensor_first_trigged == "sensor0"):
-            if(self.sensor_last_trig_timestamp["sensor0"] < self.sensor_last_trig_timestamp["sensor1"]):
+            if(self.sensor_mean_value_dict["sensor0"] < self.sensor_mean_value_dict["sensor1"]):
                 self.motion_direction_is_valid = True
         elif(self.sensor_first_trigged == "sensor1"):
-            if(self.sensor_last_trig_timestamp["sensor1"] < self.sensor_last_trig_timestamp["sensor0"]):
+            if(self.sensor_mean_value_dict["sensor1"] < self.sensor_mean_value_dict["sensor0"]):
                 self.motion_direction_is_valid = True
         
 
@@ -395,7 +388,7 @@ class TrigEvaluationManager:
         self.sensor_handler.index_counter = 0
         self.sensor_handler.create_log_arrays()
         self.valid_sensor_trigs = [False for _ in self.valid_sensor_trigs]
-        print("valid_sensor_trigs:", self.valid_sensor_trigs)
+        self.sensor_first_trigged = None
 
     
 
